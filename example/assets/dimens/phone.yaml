@@ -1,0 +1,32 @@
+common:
+    mediumFontSize: 14
+    largeFontSize: 16
+    extraLargeFontSize: 18
+    jumboFontSize: 20
+    dividerHeight: 1
+    contentPadding: 5
+
+mainScreen:
+    item:
+        borderRadius: 3
+        padding: 10
+        margin: 5
+
+historyScreen:
+    item:
+        iconSize: 14
+        paddingTop: 10
+        paddingRight: 5
+        paddingLeft: 5
+        responseCode:
+            paddingRight: 20
+        dividerMarginTop: 10
+    paddingBottom: 18
+
+detailScreen:
+    overview:
+        keys:
+            flex: 1
+        values:
+            flex: 2
+    paddingBottom: 16
