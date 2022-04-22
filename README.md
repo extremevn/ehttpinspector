@@ -1,4 +1,4 @@
-# HttpCallViewer
+# e_http_inspector
 
 A Flutter package that inspects http call requests, responses which made by [dio package](https://pub.dev/packages/dio). This package show notifications on each call and UI screen.
 
