@@ -29,6 +29,7 @@ import 'package:e_http_inspector/src/vn/com/extremevn/common/hive_util.dart';
 import 'package:e_http_inspector/src/vn/com/extremevn/common/notification_util.dart';
 import 'package:e_http_inspector/src/vn/com/extremevn/data/entity/http_call_entity.dart';
 import 'package:e_http_inspector/src/vn/com/extremevn/data/entity/map_entry_entity.dart';
+import 'package:flutter/cupertino.dart';
 
 ///  A Custom Http InterceptorsWrapper to inspect requests, responses
 ///  and save it to app local storage.
@@ -37,136 +38,151 @@ class HttpInterceptor extends InterceptorsWrapper {
 
   @override
   void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
-    var httpCall = HttpCallEntity();
+    try {
+      var httpCall = HttpCallEntity();
 
-    List<MapEntryEntity> requestFormData = [];
-    String requestBody = empty;
+      List<MapEntryEntity> requestFormData = [];
+      String requestBody = empty;
 
-    // Get request body raw data or form-data.
-    if (options.method != 'GET') {
-      final dynamic data = options.data;
-      if (data != null) {
-        if (data is Map) {
-          data.forEach((key, value) {
-            requestFormData
-                .add(MapEntryEntity(entryKey: key, entryValue: value));
-          });
-        } else if (data is FormData) {
-          final formDataMap = <String, dynamic>{}
-            ..addEntries(data.fields)
-            ..addEntries(data.files);
-          formDataMap.forEach((key, value) {
-            requestFormData
-                .add(MapEntryEntity(entryKey: key, entryValue: value));
-          });
-        } else {
-          try {
-            requestBody =
-                const JsonEncoder.withIndent('  ').convert(jsonDecode(data));
-          } catch (e) {
-            requestBody = data;
+      // Get request body raw data or form-data.
+      if (options.method != 'GET') {
+        final dynamic data = options.data;
+        if (data != null) {
+          if (data is Map) {
+            data.forEach((key, value) {
+              requestFormData.add(
+                  MapEntryEntity(entryKey: key, entryValue: value.toString()));
+            });
+          } else if (data is FormData) {
+            final formDataMap = <String, dynamic>{}
+              ..addEntries(data.fields)
+              ..addEntries(data.files);
+            formDataMap.forEach((key, value) {
+              requestFormData.add(
+                  MapEntryEntity(entryKey: key, entryValue: value.toString()));
+            });
+          } else {
+            try {
+              requestBody =
+                  const JsonEncoder.withIndent('  ').convert(jsonDecode(data));
+            } catch (e) {
+              requestBody = data.toString();
+            }
           }
         }
       }
+
+      // Save request data like: schema, url, time... to HttpCallEntity object
+      httpCall.url = options.uri.path;
+      httpCall.method = options.method;
+      httpCall.host = options.uri.host;
+      httpCall.schema = options.uri.scheme;
+      httpCall.requestHeader = _getRequestHeaders(options);
+      httpCall.requestBody = requestBody;
+      httpCall.requestFormData = requestFormData;
+      httpCall.requestTimeMillisecond =
+          DateTimeUtil.getCurrentMillisecondTime();
+      httpCall.requestTime = DateTimeUtil.getCurrentTime();
+
+      // Add HttpCallEntity object to queue to retrieve from onResponse or onError.
+      httpCallQueue.add(httpCall);
+    } catch (error) {
+      debugPrint(error.toString());
     }
-
-    // Save request data like: schema, url, time... to HttpCallEntity object
-    httpCall.url = options.uri.path;
-    httpCall.method = options.method;
-    httpCall.host = options.uri.host;
-    httpCall.schema = options.uri.scheme;
-    httpCall.requestHeader = _getRequestHeaders(options);
-    httpCall.requestBody = requestBody;
-    httpCall.requestFormData = requestFormData;
-    httpCall.requestTimeMillisecond = DateTimeUtil.getCurrentMillisecondTime();
-    httpCall.requestTime = DateTimeUtil.getCurrentTime();
-
-    // Add HttpCallEntity object to queue to retrieve from onResponse or onError.
-    httpCallQueue.add(httpCall);
     super.onRequest(options, handler);
   }
 
   @override
   void onResponse(Response response, ResponseInterceptorHandler handler) async {
     super.onResponse(response, handler);
-    List<MapEntryEntity> responseHeader = [];
-    String responseJsonFormatted = empty;
-
-    // Get response headers
-    response.headers.forEach((name, values) {
-      responseHeader
-          .add(MapEntryEntity(entryKey: name, entryValue: values.toString()));
-    });
-
-    // Format response json data to show on screen
     try {
-      final object = jsonDecode(jsonEncode(response.data));
-      responseJsonFormatted =
-          const JsonEncoder.withIndent('  ').convert(object);
-    } catch (e) {
-      responseJsonFormatted = response.data.toString();
+      List<MapEntryEntity> responseHeader = [];
+      String responseJsonFormatted = empty;
+
+      // Get response headers
+      response.headers.forEach((name, values) {
+        responseHeader
+            .add(MapEntryEntity(entryKey: name, entryValue: values.toString()));
+      });
+
+      // Format response json data to show on screen
+      try {
+        final object = jsonDecode(jsonEncode(response.data));
+        responseJsonFormatted =
+            const JsonEncoder.withIndent('  ').convert(object);
+      } catch (e) {
+        responseJsonFormatted = response.data.toString();
+      }
+
+      // Get and remove HttpCallEntity object from queue which is saved on onRequest
+      var httpCall = httpCallQueue.firstWhere(
+              (element) => element.url == response.requestOptions.uri.path);
+      httpCallQueue.remove(httpCall);
+
+      // Save response data like: code, header, time... to HttpCallEntity object
+      httpCall.response = responseJsonFormatted;
+      httpCall.responseCode = response.statusCode;
+      httpCall.responseHeader = responseHeader;
+      httpCall.responseTimeMillisecond =
+          DateTimeUtil.getCurrentMillisecondTime();
+      httpCall.responseTime = DateTimeUtil.getCurrentTime();
+
+      // Save HttpCallEntity success object to local
+      HiveUtil.dataBox.add(httpCall);
+
+      // Show notification to app
+      NotificationUtil.showNotification(
+          title: httpCall.url, body: httpCall.method ?? empty);
+    } catch (error) {
+      debugPrint(error.toString());
     }
-
-    // Get and remove HttpCallEntity object from queue which is saved on onRequest
-    var httpCall = httpCallQueue.firstWhere(
-        (element) => element.url == response.requestOptions.uri.path);
-    httpCallQueue.remove(httpCall);
-
-    // Save response data like: code, header, time... to HttpCallEntity object
-    httpCall.response = responseJsonFormatted;
-    httpCall.responseCode = response.statusCode;
-    httpCall.responseHeader = responseHeader;
-    httpCall.responseTimeMillisecond = DateTimeUtil.getCurrentMillisecondTime();
-    httpCall.responseTime = DateTimeUtil.getCurrentTime();
-
-    // Save HttpCallEntity success object to local
-    HiveUtil.dataBox.add(httpCall);
-
-    // Show notification to app
-    NotificationUtil.showNotification(
-        title: httpCall.url, body: httpCall.method ?? empty);
   }
 
   @override
   void onError(DioError err, ErrorInterceptorHandler handler) async {
     super.onError(err, handler);
-    List<MapEntryEntity> responseHeader = [];
+    try {
+      List<MapEntryEntity> responseHeader = [];
 
-    // Get response headers
-    err.requestOptions.headers.forEach((name, values) {
-      responseHeader
-          .add(MapEntryEntity(entryKey: name, entryValue: values.toString()));
-    });
+      // Get response headers
+      err.requestOptions.headers.forEach((name, values) {
+        responseHeader
+            .add(MapEntryEntity(entryKey: name, entryValue: values.toString()));
+      });
 
-    // Open hive box to save httpCallEntity to local
+      // Open hive box to save httpCallEntity to local
 
-    // Get and remove HttpCallEntity object from queue which is saved on onRequest
-    var httpCall = httpCallQueue
-        .firstWhere((element) => element.url == err.requestOptions.uri.path);
-    httpCallQueue.remove(httpCall);
+      // Get and remove HttpCallEntity object from queue which is saved on onRequest
+      var httpCall = httpCallQueue
+          .firstWhere((element) => element.url == err.requestOptions.uri.path);
+      httpCallQueue.remove(httpCall);
 
-    // Get response code, response error message or body depend on DioErrorType
-    httpCall.responseCode = err.response?.statusCode ?? 0;
-    if (err.type == DioErrorType.response && httpCall.responseCode != 404) {
-      var data = err.response?.data;
-      if (data == null) {
-        httpCall.response = err.message.toString();
+      // Get response code, response error message or body depend on DioErrorType
+      httpCall.responseCode = err.response?.statusCode ?? 0;
+      if (err.type == DioErrorType.response && httpCall.responseCode != 404) {
+        var data = err.response?.data;
+        if (data == null) {
+          httpCall.response = err.message.toString();
+        } else {
+          httpCall.response = data.toString();
+        }
       } else {
-        httpCall.response = data.toString();
+        httpCall.response = err.message.toString();
       }
-    } else {
-      httpCall.response = err.message.toString();
+      httpCall.responseHeader = responseHeader;
+      httpCall.responseTime = DateTimeUtil.getCurrentTime();
+      httpCall.responseTimeMillisecond =
+          DateTimeUtil.getCurrentMillisecondTime();
+
+      // Save HttpCallEntity error object to local
+      await HiveUtil.dataBox.add(httpCall);
+
+      // Show notification to app
+      NotificationUtil.showNotification(
+          title: httpCall.url, body: httpCall.method ?? empty);
+    } catch (error) {
+      debugPrint(error.toString());
     }
-    httpCall.responseHeader = responseHeader;
-    httpCall.responseTime = DateTimeUtil.getCurrentTime();
-    httpCall.responseTimeMillisecond = DateTimeUtil.getCurrentMillisecondTime();
-
-    // Save HttpCallEntity error object to local
-    await HiveUtil.dataBox.add(httpCall);
-
-    // Show notification to app
-    NotificationUtil.showNotification(
-        title: httpCall.url, body: httpCall.method ?? empty);
   }
 
   /// Get request headers from RequestOptions
