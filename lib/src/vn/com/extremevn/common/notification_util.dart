@@ -18,80 +18,160 @@
 /// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 /// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 /// SOFTWARE.
+import 'dart:convert';
 
-import 'package:awesome_notifications/awesome_notifications.dart';
+import 'package:e_http_inspector/e_http_inspector.dart';
+import 'package:e_http_inspector/src/vn/com/extremevn/ui/detail/http_detail_screen.dart';
 import 'package:e_http_inspector/src/vn/com/extremevn/ui/history/http_history_screen.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart'
+    show defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 class NotificationUtil {
-  static late String _channelKey;
-  static int _notificationId = 0;
+  static FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+      FlutterLocalNotificationsPlugin();
+  static AndroidNotificationChannel? channel;
 
-  /// Show awesome notification.
-  /// [title] Title of notification
-  /// [body] Body of notification
-  static showNotification({String? title, String? body}) {
-    AwesomeNotifications().createNotification(
-      content: NotificationContent(
-        id: _notificationId++,
-        channelKey: _channelKey,
-        title: title,
-        body: body,
-        category: NotificationCategory.Event,
-      ),
+  static bool _isHandledNotificationAppLaunch = false;
+  static String _channelId = "http_intercept_channel";
+  static String _channelName = "HttpInterceptChannel";
+  static String _channelDescription = "Http Intercept Channel";
+  static String _channelGroupId = "HttpInterceptGroupId";
+  static String _channelGroupName = "HttpInterceptChannelGroup";
+  static String _channelGroupDescription = "HttpInterceptChannelGroup";
+
+  /// Factory for create an instance of [NotificationUtil].
+  factory NotificationUtil() => _instance;
+
+  NotificationUtil._();
+
+  static final NotificationUtil _instance = NotificationUtil._();
+
+  static Future<bool> init(
+      String channelId, String channelName, String channelDes,
+      {String? channelGroupKey,
+      String? channelGroupName,
+      String? channelGroupDescription,
+      bool autoRequestPermission = false}) async {
+    _channelId = channelId;
+    _channelName = channelName;
+    _channelDescription = channelDes;
+    _channelGroupId = channelGroupKey ?? _channelGroupId;
+    _channelGroupName = channelGroupName ?? _channelGroupName;
+    _channelGroupDescription =
+        channelGroupDescription ?? _channelGroupDescription;
+    autoRequestPermission = autoRequestPermission;
+    final bool hasPermission;
+    if (autoRequestPermission) {
+      if (defaultTargetPlatform == TargetPlatform.iOS) {
+        hasPermission = await requestIosNotificationPermission() ?? false;
+      } else {
+        hasPermission = await requestAndroidNotificationPermission() ?? false;
+      }
+    } else {
+      hasPermission = false;
+    }
+    await initNotificationPlugin();
+    processNotificationAppLaunch();
+    return hasPermission;
+  }
+
+  showNotification({required int id, String? title, String? body}) {
+    final notificationId = UniqueKey().hashCode;
+    String encodePayload = json.encode({"id": id});
+    flutterLocalNotificationsPlugin.show(
+        notificationId,
+        title,
+        body,
+        NotificationDetails(
+            android: AndroidNotificationDetails(
+          channel!.id,
+          channel!.name,
+          channelDescription: channel!.description,
+        )),
+        payload: encodePayload);
+  }
+
+  static Future<bool?>? requestAndroidNotificationPermission() {
+    return flutterLocalNotificationsPlugin
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
+        ?.requestPermission();
+  }
+
+  static Future<bool?>? requestIosNotificationPermission() {
+    return flutterLocalNotificationsPlugin
+        .resolvePlatformSpecificImplementation<
+            IOSFlutterLocalNotificationsPlugin>()
+        ?.requestPermissions(
+          alert: true,
+          badge: true,
+          sound: true,
+        );
+  }
+
+  static Future<void> initNotificationPlugin() async {
+    AndroidNotificationChannelGroup androidNotificationChannelGroup =
+        AndroidNotificationChannelGroup(_channelGroupId, _channelGroupName,
+            description: _channelGroupDescription);
+    await flutterLocalNotificationsPlugin
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannelGroup(androidNotificationChannelGroup);
+    const initializationSettingsAndroid =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
+    const DarwinInitializationSettings initializationSettingsDarwin =
+        DarwinInitializationSettings(
+            requestSoundPermission: true,
+            requestBadgePermission: true,
+            requestAlertPermission: true);
+    const initializationSettings = InitializationSettings(
+        android: initializationSettingsAndroid,
+        iOS: initializationSettingsDarwin);
+    flutterLocalNotificationsPlugin.initialize(initializationSettings,
+        onDidReceiveNotificationResponse: onSelectNotification,
+        onDidReceiveBackgroundNotificationResponse: onSelectNotification);
+    channel ??= AndroidNotificationChannel(
+      _channelId,
+      _channelName,
+      description: _channelDescription,
+      groupId: _channelGroupId,
+      importance: Importance.high,
     );
+    if (channel != null) {
+      await flutterLocalNotificationsPlugin
+          .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>()
+          ?.createNotificationChannel(channel!);
+    }
   }
 
-  /// Initialize awesome notification package
-  /// [navigatorKey] Key to show notification.
-  /// [channelKey] notification channel key
-  /// [channelName] notification channel name
-  /// [channelDes] notification channel description
-  /// [channelGroupKey] notification channel group key
-  /// [context] App context
-  static initAwesomeNotification(
-    GlobalKey<NavigatorState> navigatorKey,
-    String channelKey,
-    String channelName,
-    String channelDes, {
-    String? channelGroupKey,
-  }) async {
-    _channelKey = channelKey;
-    AwesomeNotifications().initialize(
-        null,
-        [
-          NotificationChannel(
-            channelGroupKey: channelGroupKey,
-            channelKey: channelKey,
-            channelName: channelName,
-            channelDescription: channelDes,
-            importance: NotificationImportance.Low,
-          ),
-        ],
-        debug: kDebugMode);
-
-    await requestBasicPermissionToSendNotifications();
-
-    AwesomeNotifications().actionStream.listen((action) {
-      if (action.channelKey == channelKey) {
-        navigatorKey.currentState!
-            .push(MaterialPageRoute(builder: (_) => HttpHistoryScreen()));
+  static void processNotificationAppLaunch() {
+    if (_isHandledNotificationAppLaunch) return;
+    _isHandledNotificationAppLaunch = true;
+    flutterLocalNotificationsPlugin
+        .getNotificationAppLaunchDetails()
+        .then((value) {
+      if (value != null &&
+          value.notificationResponse != null &&
+          value.didNotificationLaunchApp == true) {
+        onSelectNotification(value.notificationResponse!);
       }
     });
   }
+}
 
-  /// Request basic permission if need, include following permissions.
-  /// [NotificationPermission.Alert],
-  /// [NotificationPermission.Sound],
-  /// [NotificationPermission.Badge],
-  /// [NotificationPermission.Vibration],
-  /// [NotificationPermission.Light],
-  static Future<void> requestBasicPermissionToSendNotifications() async {
-    AwesomeNotifications().isNotificationAllowed().then((isAllowed) async {
-      if (!isAllowed) {
-        await AwesomeNotifications().requestPermissionToSendNotifications();
-      }
-    });
+onSelectNotification(NotificationResponse? notificationResponse) {
+  if (notificationResponse == null || notificationResponse.payload == null) {
+    return;
+  }
+  final payloadMap = json.decode(notificationResponse.payload!);
+  EHttpInspector.navigatorKey.currentState
+      ?.push(MaterialPageRoute(builder: (_) => HttpHistoryScreen()));
+  if (payloadMap != null && payloadMap["id"] != null) {
+    EHttpInspector.navigatorKey.currentState?.push(MaterialPageRoute(
+      builder: (_) => HttpDetailScreen(id: payloadMap["id"]!),
+    ));
   }
 }

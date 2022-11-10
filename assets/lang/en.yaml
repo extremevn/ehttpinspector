@@ -1,0 +1,27 @@
+app:
+    name: HttpCallViewer Demo
+
+mainScreen:
+    title: Sample test request/respond
+    description: "Click to float button to send get request:"
+    increment: Increment
+
+common:
+    search: Search...
+    item:
+        millisecond: "{time}ms"
+
+detailScreen:
+    details: Details
+    overview: Overview
+    request: Request
+    response: Response
+    copied: Copied
+
+historyScreen:
+    network: Succeed requests
+    error: Error requests
+    http: Http
+    deleteConfirm: Are you sure to delete all record?
+    cancel: Cancel
+    ok: OK

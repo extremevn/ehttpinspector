@@ -1,3 +1,3 @@
-# example
+# About example projects
 
-A example Flutter application uses [e_http_inspector](https://pub.dev/packages/e_http_inpector) packages
+A example project which is using e_http_inspector library 

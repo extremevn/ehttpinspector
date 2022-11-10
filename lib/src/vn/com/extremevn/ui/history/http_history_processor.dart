@@ -19,6 +19,8 @@
 /// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 /// SOFTWARE.
 
+import 'dart:async';
+
 import 'package:e_http_inspector/src/vn/com/extremevn/common/constant.dart';
 import 'package:e_http_inspector/src/vn/com/extremevn/common/hive_util.dart';
 import 'package:e_http_inspector/src/vn/com/extremevn/data/entity/http_call_entity.dart';
@@ -46,58 +48,75 @@ class HttpHistoryEventStateProcessor
               httpCallSearchResult: []),
         ) {
     _initHiveListener();
+    on<HttpHistoryLoadEvent>(onHttpHistoryLoadEvent);
+    on<HttpHistoryDeleteAllEvent>(onHttpHistoryDeleteAllEvent);
+    on<HttpHistoryOnSearchQueryChangedEvent>(
+        onHttpHistoryOnSearchQueryChangedEvent);
+    on<HttpHistorySearchEvent>(onHttpHistorySearchEvent);
+    on<HttpHistoryChoicesChangeEvent>(onHttpHistoryChoicesChangeEvent);
   }
 
-  @override
-  Stream<HttpHistoryState> processEvent(HttpHistoryEvent event) async* {
-    var currentState = state;
-    if (event is HttpHistoryLoadEvent) {
-      yield currentState.copy(isLoading: true);
-      List<HttpCallEntity> httpCalls = [];
-      List<String> chips = [];
-      for (var element in HiveUtil.dataBox.values) {
-        var httpCall = element as HttpCallEntity;
-        httpCalls.add(httpCall);
-      }
-      _sortHttpCallEntityList(httpCalls);
-      chips = _getHttpResponseCodeChips(httpCalls);
-      yield currentState.copy(
-          httpCalls: httpCalls, chips: chips, isInit: false, isLoading: false);
-    } else if (event is HttpHistoryDeleteAllEvent) {
-      await HiveUtil.dataBox.clear();
-      yield currentState.copy(
-          httpCalls: [],
-          isLoading: false,
-          isSearching: false,
-          httpCallSearchResult: []);
-    } else if (event is HttpHistoryOnSearchQueryChangedEvent) {
-      if (event.query.isEmpty && currentState.choices.isEmpty) {
-        yield currentState.copy(httpCallSearchResult: [], query: event.query);
-      } else {
-        List<HttpCallEntity> httpCallSearchResult = _filterHttpCallEntityList(
-            currentState.choices, event.query, currentState.httpCalls);
-        yield currentState.copy(
-            httpCallSearchResult: httpCallSearchResult, query: event.query);
-      }
-    } else if (event is HttpHistorySearchEvent) {
-      if (currentState.choices.isEmpty) {
-        yield currentState.copy(
-            httpCallSearchResult: [],
-            query: empty,
-            isSearching: !currentState.isSearching);
-      } else {
-        yield currentState.copy(
-            httpCallSearchResult: _filterHttpCallEntityList(
-                currentState.choices, "", currentState.httpCalls),
-            query: empty,
-            isSearching: !currentState.isSearching);
-      }
-    } else if (event is HttpHistoryChoicesChangeEvent) {
-      List<HttpCallEntity> httpCallSearchResult = _filterHttpCallEntityList(
-          event.choices, currentState.query, currentState.httpCalls);
-      yield currentState.copy(
-          choices: event.choices, httpCallSearchResult: httpCallSearchResult);
+  FutureOr<void> onHttpHistoryLoadEvent(
+      HttpHistoryLoadEvent event, Emitter<HttpHistoryState> emitter) async {
+    emitter.call(state.copy(isLoading: true));
+    List<HttpCallEntity> httpCalls = [];
+    List<String> chips = [];
+    for (var element in HiveUtil.dataBox.values) {
+      var httpCall = element as HttpCallEntity;
+      httpCalls.add(httpCall);
     }
+    _sortHttpCallEntityList(httpCalls);
+    chips = _getHttpResponseCodeChips(httpCalls);
+    emitter.call(state.copy(
+        httpCalls: httpCalls, chips: chips, isInit: false, isLoading: false));
+  }
+
+  FutureOr<void> onHttpHistoryDeleteAllEvent(HttpHistoryDeleteAllEvent event,
+      Emitter<HttpHistoryState> emitter) async {
+    await HiveUtil.dataBox.clear();
+    emitter.call(state.copy(
+        httpCalls: [],
+        isLoading: false,
+        isSearching: false,
+        httpCallSearchResult: []));
+  }
+
+  FutureOr<void> onHttpHistoryOnSearchQueryChangedEvent(
+      HttpHistoryOnSearchQueryChangedEvent event,
+      Emitter<HttpHistoryState> emitter) async {
+    if (event.query.isEmpty && state.choices.isEmpty) {
+      emitter.call(state.copy(httpCallSearchResult: [], query: event.query));
+    } else {
+      List<HttpCallEntity> httpCallSearchResult = _filterHttpCallEntityList(
+          state.choices, event.query, state.httpCalls);
+      emitter.call(state.copy(
+          httpCallSearchResult: httpCallSearchResult, query: event.query));
+    }
+  }
+
+  FutureOr<void> onHttpHistorySearchEvent(
+      HttpHistorySearchEvent event, Emitter<HttpHistoryState> emitter) async {
+    if (state.choices.isEmpty) {
+      emitter.call(state.copy(
+          httpCallSearchResult: [],
+          query: empty,
+          isSearching: !state.isSearching));
+    } else {
+      emitter.call(state.copy(
+          httpCallSearchResult:
+              _filterHttpCallEntityList(state.choices, "", state.httpCalls),
+          query: empty,
+          isSearching: !state.isSearching));
+    }
+  }
+
+  FutureOr<void> onHttpHistoryChoicesChangeEvent(
+      HttpHistoryChoicesChangeEvent event,
+      Emitter<HttpHistoryState> emitter) async {
+    List<HttpCallEntity> httpCallSearchResult =
+        _filterHttpCallEntityList(event.choices, state.query, state.httpCalls);
+    emitter.call(state.copy(
+        choices: event.choices, httpCallSearchResult: httpCallSearchResult));
   }
 
   @override
