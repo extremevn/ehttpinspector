@@ -31,21 +31,17 @@ import 'package:flutter/material.dart';
 import 'package:pull_to_refresh/pull_to_refresh.dart';
 
 //ignore: must_be_immutable
-class HttpHistoryScreen extends CoreScreen<HttpHistoryEvent, HttpHistoryState,
-    HttpHistoryEventStateProcessor> {
+class HttpHistoryScreen extends CoreScreen<HttpHistoryEvent, HttpHistoryState> {
   final FocusNode _historySearchFocusNode = FocusNode();
   final _historySearchController = TextEditingController();
   final RefreshController _refreshSuccessHttpCallController =
-      RefreshController(initialRefresh: false);
-  final RefreshController _refreshErrorHttpCallController =
       RefreshController(initialRefresh: false);
   static const totalTab = 2;
 
   HttpHistoryScreen({Key? key}) : super(key: key);
 
   @override
-  Widget buildScreenUi(BuildContext context,
-      HttpHistoryEventStateProcessor processor, HttpHistoryState state) {
+  Widget buildScreenUi(BuildContext context) {
     if (state.isInit) {
       processor.raiseEvent(HttpHistoryLoadEvent());
     }
@@ -208,17 +204,5 @@ class HttpHistoryScreen extends CoreScreen<HttpHistoryEvent, HttpHistoryState,
   @override
   HttpHistoryEventStateProcessor createEventProcessor(BuildContext context) {
     return HttpHistoryEventStateProcessor();
-  }
-
-  @override
-  void handleDataStateChange(BuildContext context,
-      HttpHistoryEventStateProcessor processor, HttpHistoryState state) {
-    if (state.isSearching) {
-      _historySearchFocusNode.requestFocus();
-    }
-    if (!state.isLoading) {
-      _refreshSuccessHttpCallController.refreshCompleted();
-      _refreshErrorHttpCallController.refreshCompleted();
-    }
   }
 }

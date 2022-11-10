@@ -29,9 +29,9 @@ import 'package:eventstateprocessor/eventstateprocessor.dart';
 import 'package:flutter/material.dart';
 
 //ignore: must_be_immutable
-class HttpDetailScreen extends CoreScreen<HttpDetailEvent, HttpDetailState,
-    HttpDetailEventStateProcessor> {
-  final HttpCallEntity item;
+class HttpDetailScreen extends CoreScreen<HttpDetailEvent, HttpDetailState> {
+  final HttpCallEntity? item;
+  final int? id;
   TabController? _tabController;
   static const totalTab = 3;
 
@@ -50,7 +50,7 @@ class HttpDetailScreen extends CoreScreen<HttpDetailEvent, HttpDetailState,
             style: TextStyle(fontSize: AppDimenKeys.commonLargeFontSize))),
   ];
 
-  HttpDetailScreen({Key? key, required this.item}) : super(key: key);
+  HttpDetailScreen({Key? key, this.item, this.id}) : super(key: key);
 
   @override
   void onScreenInit() {
@@ -65,10 +65,9 @@ class HttpDetailScreen extends CoreScreen<HttpDetailEvent, HttpDetailState,
   }
 
   @override
-  Widget buildScreenUi(BuildContext context,
-      HttpDetailEventStateProcessor processor, HttpDetailState state) {
+  Widget buildScreenUi(BuildContext context) {
     if (state.isInit) {
-      processor.raiseEvent(HttpDetailLoadEvent(httpCallEntity: item));
+      processor.raiseEvent(HttpDetailLoadEvent(httpCallEntity: item, id: id));
       _tabController?.addListener(() {
         if (_tabController != null && _tabController!.indexIsChanging) {
           processor.raiseEvent(
@@ -176,13 +175,5 @@ class HttpDetailScreen extends CoreScreen<HttpDetailEvent, HttpDetailState,
   @override
   HttpDetailEventStateProcessor createEventProcessor(BuildContext context) {
     return HttpDetailEventStateProcessor();
-  }
-
-  @override
-  void handleDataStateChange(BuildContext context,
-      HttpDetailEventStateProcessor processor, HttpDetailState state) {
-    if (state.isSearching) {
-      _detailSearchFocusNode.requestFocus();
-    }
   }
 }

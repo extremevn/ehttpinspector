@@ -19,10 +19,13 @@
 /// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 /// SOFTWARE.
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:e_http_inspector/src/vn/com/extremevn/common/constant.dart';
 import 'package:e_http_inspector/src/vn/com/extremevn/common/date_time_util.dart';
+import 'package:e_http_inspector/src/vn/com/extremevn/common/hive_util.dart';
+import 'package:e_http_inspector/src/vn/com/extremevn/data/entity/http_call_entity.dart';
 import 'package:e_http_inspector/src/vn/com/extremevn/data/entity/map_entry_entity.dart';
 import 'package:e_http_inspector/src/vn/com/extremevn/ui/detail/http_detail_event.dart';
 import 'package:e_http_inspector/src/vn/com/extremevn/ui/detail/http_detail_state.dart';
@@ -41,100 +44,131 @@ class HttpDetailEventStateProcessor
             request: [],
             overview: [],
             query: empty,
-            isSearching: false));
+            isSearching: false)) {
+    on<HttpDetailLoadEvent>(onHttpDetailLoadEvent);
+    on<HttpDetailOnSearchQueryChangeEvent>(
+        onHttpDetailOnSearchQueryChangeEvent);
+    on<HttpDetailSearchEvent>(onHttpDetailSearchEvent);
+    on<HttpDetailCopyClickedEvent>(onHttpDetailCopyClickedEvent);
+    on<HttpDetailTabChangeEvent>(onHttpDetailTabChangeEvent);
+  }
 
-  @override
-  Stream<HttpDetailState> processEvent(HttpDetailEvent event) async* {
-    var currentState = state;
-    if (event is HttpDetailLoadEvent) {
-      List<MapEntryEntity> overview = [];
-      bool isJsonBody = true;
-      var totalHttpTime = event.httpCallEntity.responseTimeMillisecond -
-          event.httpCallEntity.requestTimeMillisecond;
-      overview.add(MapEntryEntity(
-          entryKey: Keys.url, entryValue: event.httpCallEntity.host ?? empty));
-      overview.add(MapEntryEntity(
-          entryKey: Keys.method,
-          entryValue: event.httpCallEntity.method ?? empty));
-      overview.add(MapEntryEntity(
-          entryKey: Keys.responseCode,
-          entryValue: event.httpCallEntity.responseCode.toString()));
-      overview.add(MapEntryEntity(
-          entryKey: Keys.requestAt,
-          entryValue: event.httpCallEntity.requestTime ?? empty));
-      overview.add(MapEntryEntity(
-          entryKey: Keys.responseAt,
-          entryValue: event.httpCallEntity.responseTime ?? empty));
-      overview.add(MapEntryEntity(
-          entryKey: Keys.requestedTime,
-          entryValue: "${totalHttpTime.toString()}ms"));
-
-      List<MapEntryEntity> responseResultList = [];
-      if (event.httpCallEntity.responseHeader != null) {
-        responseResultList.addAll(event.httpCallEntity.responseHeader!);
-        for (var element in event.httpCallEntity.responseHeader!) {
-          if (element.entryKey == contentType &&
-              !element.entryValue.contains(contentTypeJson)) {
-            isJsonBody = false;
-          }
+  FutureOr<void> onHttpDetailLoadEvent(
+      HttpDetailLoadEvent event, Emitter<HttpDetailState> emitter) async {
+    emitter.call(state.copy(isInit: false, isLoading: true));
+    bool hasData = false;
+    if (event.httpCallEntity == null && event.id == null) return;
+    late HttpCallEntity httpCallEntity;
+    if (event.httpCallEntity != null) {
+      hasData = true;
+      httpCallEntity = event.httpCallEntity!;
+    } else {
+      for (var element in HiveUtil.dataBox.values) {
+        var httpCall = element as HttpCallEntity;
+        if (httpCall.requestTimeMillisecond == event.id) {
+          hasData = true;
+          httpCallEntity = httpCall;
+          break;
         }
       }
-
-      if (event.httpCallEntity.response != null) {
-        responseResultList.add(MapEntryEntity(
-            entryKey: bodyTitle,
-            entryValue:
-                isJsonBody ? event.httpCallEntity.response! : contentBinary));
-      }
-
-      List<MapEntryEntity> requestResultList = [];
-      if (event.httpCallEntity.requestHeader != null &&
-          event.httpCallEntity.requestHeader!.isNotEmpty) {
-        requestResultList.addAll(event.httpCallEntity.requestHeader!);
-      }
-      if (event.httpCallEntity.requestFormData != null &&
-          event.httpCallEntity.requestFormData!.isNotEmpty) {
-        requestResultList.addAll(event.httpCallEntity.requestFormData!);
-      }
-      if (event.httpCallEntity.requestBody != null &&
-          event.httpCallEntity.requestBody!.isNotEmpty) {
-        requestResultList.add(MapEntryEntity(
-            entryKey: bodyTitle,
-            entryValue: event.httpCallEntity.requestBody!));
-      }
-
-      yield currentState.copy(
-          isInit: false,
-          overview: overview,
-          response: responseResultList,
-          request: requestResultList);
-    } else if (event is HttpDetailOnSearchQueryChangeEvent) {
-      yield currentState.copy(query: event.value);
-    } else if (event is HttpDetailSearchEvent) {
-      yield currentState.copy(
-          isSearching: !currentState.isSearching, query: empty);
-    } else if (event is HttpDetailTabChangeEvent) {
-      yield currentState.copy(
-          isInit: false, currentIndex: event.currentTabIndex);
-    } else if (event is HttpDetailCopyClickedEvent) {
-      List<String> clipBoardData = [];
-      if (currentState.currentIndex == 0) {
-        for (var element in currentState.overview) {
-          clipBoardData.add('${element.entryKey}: ${element.entryValue}');
-        }
-      } else if (currentState.currentIndex == 1) {
-        for (var element in currentState.request) {
-          clipBoardData.add('${element.entryKey}: ${element.entryValue}');
-        }
-      } else {
-        for (var element in currentState.response) {
-          clipBoardData.add('${element.entryKey}: ${element.entryValue}');
-        }
-      }
-      var clipBoard = clipBoardData.join("\n");
-      Clipboard.setData(ClipboardData(text: clipBoard));
-      _write(clipBoard);
     }
+    if (!hasData) return;
+    List<MapEntryEntity> overview = [];
+    bool isJsonBody = true;
+    var totalHttpTime = httpCallEntity.responseTimeMillisecond -
+        httpCallEntity.requestTimeMillisecond;
+    overview.add(MapEntryEntity(
+        entryKey: Keys.url, entryValue: httpCallEntity.host ?? empty));
+    overview.add(MapEntryEntity(
+        entryKey: Keys.method, entryValue: httpCallEntity.method ?? empty));
+    overview.add(MapEntryEntity(
+        entryKey: Keys.responseCode,
+        entryValue: httpCallEntity.responseCode.toString()));
+    overview.add(MapEntryEntity(
+        entryKey: Keys.requestAt,
+        entryValue: httpCallEntity.requestTime ?? empty));
+    overview.add(MapEntryEntity(
+        entryKey: Keys.responseAt,
+        entryValue: httpCallEntity.responseTime ?? empty));
+    overview.add(MapEntryEntity(
+        entryKey: Keys.requestedTime,
+        entryValue: "${totalHttpTime.toString()}ms"));
+
+    List<MapEntryEntity> responseResultList = [];
+    if (httpCallEntity.responseHeader != null) {
+      responseResultList.addAll(httpCallEntity.responseHeader!);
+      for (var element in httpCallEntity.responseHeader!) {
+        if (element.entryKey == contentType &&
+            !element.entryValue.contains(contentTypeJson)) {
+          isJsonBody = false;
+        }
+      }
+    }
+
+    if (httpCallEntity.response != null) {
+      responseResultList.add(MapEntryEntity(
+          entryKey: bodyTitle,
+          entryValue: isJsonBody ? httpCallEntity.response! : contentBinary));
+    }
+
+    List<MapEntryEntity> requestResultList = [];
+    if (httpCallEntity.requestHeader != null &&
+        httpCallEntity.requestHeader!.isNotEmpty) {
+      requestResultList.addAll(httpCallEntity.requestHeader!);
+    }
+    if (httpCallEntity.requestFormData != null &&
+        httpCallEntity.requestFormData!.isNotEmpty) {
+      requestResultList.addAll(httpCallEntity.requestFormData!);
+    }
+    if (httpCallEntity.requestBody != null &&
+        httpCallEntity.requestBody!.isNotEmpty) {
+      requestResultList.add(MapEntryEntity(
+          entryKey: bodyTitle, entryValue: httpCallEntity.requestBody!));
+    }
+
+    emitter.call(state.copy(
+        isInit: false,
+        overview: overview,
+        response: responseResultList,
+        request: requestResultList));
+  }
+
+  FutureOr<void> onHttpDetailOnSearchQueryChangeEvent(
+      HttpDetailOnSearchQueryChangeEvent event,
+      Emitter<HttpDetailState> emitter) async {
+    emitter.call(state.copy(query: event.value));
+  }
+
+  FutureOr<void> onHttpDetailSearchEvent(
+      HttpDetailSearchEvent event, Emitter<HttpDetailState> emitter) async {
+    emitter.call(state.copy(isSearching: !state.isSearching, query: empty));
+  }
+
+  FutureOr<void> onHttpDetailTabChangeEvent(
+      HttpDetailTabChangeEvent event, Emitter<HttpDetailState> emitter) async {
+    emitter
+        .call(state.copy(isInit: false, currentIndex: event.currentTabIndex));
+  }
+
+  FutureOr<void> onHttpDetailCopyClickedEvent(HttpDetailCopyClickedEvent event,
+      Emitter<HttpDetailState> emitter) async {
+    List<String> clipBoardData = [];
+    if (state.currentIndex == 0) {
+      for (var element in state.overview) {
+        clipBoardData.add('${element.entryKey}: ${element.entryValue}');
+      }
+    } else if (state.currentIndex == 1) {
+      for (var element in state.request) {
+        clipBoardData.add('${element.entryKey}: ${element.entryValue}');
+      }
+    } else {
+      for (var element in state.response) {
+        clipBoardData.add('${element.entryKey}: ${element.entryValue}');
+      }
+    }
+    var clipBoard = clipBoardData.join("\n");
+    Clipboard.setData(ClipboardData(text: clipBoard));
+    _write(clipBoard);
   }
 
   _write(String text) async {

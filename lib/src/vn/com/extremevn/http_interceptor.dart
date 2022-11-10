@@ -18,7 +18,6 @@
 /// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 /// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 /// SOFTWARE.
-
 import 'dart:collection';
 import 'dart:convert';
 
@@ -29,7 +28,7 @@ import 'package:e_http_inspector/src/vn/com/extremevn/common/hive_util.dart';
 import 'package:e_http_inspector/src/vn/com/extremevn/common/notification_util.dart';
 import 'package:e_http_inspector/src/vn/com/extremevn/data/entity/http_call_entity.dart';
 import 'package:e_http_inspector/src/vn/com/extremevn/data/entity/map_entry_entity.dart';
-import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 
 ///  A Custom Http InterceptorsWrapper to inspect requests, responses
 ///  and save it to app local storage.
@@ -66,7 +65,7 @@ class HttpInterceptor extends InterceptorsWrapper {
               requestBody =
                   const JsonEncoder.withIndent('  ').convert(jsonDecode(data));
             } catch (e) {
-              requestBody = data.toString();
+              requestBody = data;
             }
           }
         }
@@ -116,7 +115,7 @@ class HttpInterceptor extends InterceptorsWrapper {
 
       // Get and remove HttpCallEntity object from queue which is saved on onRequest
       var httpCall = httpCallQueue.firstWhere(
-              (element) => element.url == response.requestOptions.uri.path);
+          (element) => element.url == response.requestOptions.uri.path);
       httpCallQueue.remove(httpCall);
 
       // Save response data like: code, header, time... to HttpCallEntity object
@@ -131,8 +130,10 @@ class HttpInterceptor extends InterceptorsWrapper {
       HiveUtil.dataBox.add(httpCall);
 
       // Show notification to app
-      NotificationUtil.showNotification(
-          title: httpCall.url, body: httpCall.method ?? empty);
+      NotificationUtil().showNotification(
+          id: httpCall.requestTimeMillisecond,
+          title: httpCall.url,
+          body: httpCall.method ?? empty);
     } catch (error) {
       debugPrint(error.toString());
     }
@@ -178,8 +179,10 @@ class HttpInterceptor extends InterceptorsWrapper {
       await HiveUtil.dataBox.add(httpCall);
 
       // Show notification to app
-      NotificationUtil.showNotification(
-          title: httpCall.url, body: httpCall.method ?? empty);
+      NotificationUtil().showNotification(
+          id: httpCall.requestTimeMillisecond,
+          title: httpCall.url,
+          body: httpCall.method ?? empty);
     } catch (error) {
       debugPrint(error.toString());
     }

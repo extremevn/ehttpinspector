@@ -25,9 +25,9 @@ import 'package:eventstateprocessor/eventstateprocessor.dart';
 abstract class HttpDetailEvent extends UiEvent {}
 
 class HttpDetailLoadEvent extends HttpDetailEvent {
-  HttpCallEntity httpCallEntity;
-
-  HttpDetailLoadEvent({required this.httpCallEntity});
+  HttpCallEntity? httpCallEntity;
+  int? id;
+  HttpDetailLoadEvent({this.httpCallEntity, this.id});
 
   @override
   String toString() => "HttpDetailLoadEvent, httpCallEntity: $httpCallEntity";

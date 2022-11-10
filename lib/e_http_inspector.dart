@@ -37,7 +37,7 @@ class EHttpInspector {
 
   static Dio? _dio;
   static HttpInterceptor? _interceptor;
-  static late GlobalKey<NavigatorState> _navigatorKey;
+  static late GlobalKey<NavigatorState> navigatorKey;
 
   /// Initialize package:
   /// - with [dio]  instance for inspector
@@ -48,19 +48,15 @@ class EHttpInspector {
   /// [channelDes] notification channel description
   /// [channelGroupKey] notification channel group key
   /// [navigatorKey] App global navigator key
-  static init(
-    Dio dio,
-    GlobalKey<NavigatorState> navigatorKey,
-    String channelKey,
-    String channelName,
-    String channelDes, {
-    String? channelGroupKey,
-  }) async {
+  static init(Dio dio, GlobalKey<NavigatorState> navigatorKey,
+      String channelKey, String channelName, String channelDes,
+      {String? channelGroupKey, bool autoRequestPermission = true}) async {
     _dio = dio;
-    _navigatorKey = navigatorKey;
+    EHttpInspector.navigatorKey = navigatorKey;
     await initInterceptor(dio);
     await initNotification(navigatorKey, channelKey, channelName, channelDes,
-        channelGroupKey: channelGroupKey);
+        channelGroupKey: channelGroupKey,
+        autoRequestPermission: autoRequestPermission);
   }
 
   /// Initialize package's inspector for [dio]
@@ -80,20 +76,14 @@ class EHttpInspector {
   /// - [channelDes] notification channel description
   /// - [channelGroupKey] notification channel group key
   /// - [navigatorKey] App global navigator key
-  static initNotification(
-    GlobalKey<NavigatorState> navigatorKey,
-    String channelKey,
-    String channelName,
-    String channelDes, {
-    String? channelGroupKey,
-  }) async {
+  static Future<bool> initNotification(GlobalKey<NavigatorState> navigatorKey,
+      String channelKey, String channelName, String channelDes,
+      {String? channelGroupKey, bool autoRequestPermission = true}) async {
     WidgetsFlutterBinding.ensureInitialized();
-    _navigatorKey = navigatorKey;
-    WidgetsBinding.instance!.addPostFrameCallback((timeStamp) async {
-      await NotificationUtil.initAwesomeNotification(
-          navigatorKey, channelKey, channelName, channelDes,
-          channelGroupKey: channelGroupKey);
-    });
+    EHttpInspector.navigatorKey = navigatorKey;
+    return await NotificationUtil.init(channelKey, channelName, channelDes,
+        channelGroupKey: channelGroupKey,
+        autoRequestPermission: autoRequestPermission);
   }
 
   /// Dispose inspect http call and close data stream
@@ -108,7 +98,7 @@ class EHttpInspector {
 
   /// Open http history screen
   static openHttpHistoryScreen() {
-    _navigatorKey.currentState
+    navigatorKey.currentState
         ?.push(MaterialPageRoute(builder: (_) => HttpHistoryScreen()));
   }
 }

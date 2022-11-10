@@ -52,6 +52,7 @@ class HttpDetailItemWidget extends StatelessWidget {
                 color: ColorKeys.colorItemDetail,
                 border:
                     Border(bottom: BorderSide(color: Colors.teal.shade100))),
+            padding: const EdgeInsets.all(AppDimenKeys.detailScreenItemPadding),
             child: Row(
               children: [
                 Expanded(
@@ -63,13 +64,12 @@ class HttpDetailItemWidget extends StatelessWidget {
                 Expanded(
                   flex: AppDimenKeys.detailScreenOverviewValuesFlex.toInt(),
                   child: HttpHighLightItemWidget(
-                    text: item.entryValue,
+                    text: item.entryValue.toString(),
                     query: query,
                   ),
                 )
               ],
             ),
-            padding: const EdgeInsets.all(AppDimenKeys.detailScreenItemPadding),
           );
   }
 }
